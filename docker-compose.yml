@@ -5,3 +5,23 @@ services:
       - "8080:8080"
     environment:
       PORT: 8080
+      MONGO_URI: mongodb://mongo:27017/worldcup
+      MONGO_COLLECTION: teams
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  mongo_data:
