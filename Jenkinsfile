@@ -62,7 +62,7 @@ pipeline {
                     echo "Waiting for app health..."
                     ok=0
                     for i in \$(seq 1 60); do
-                      if curl -fsS http://127.0.0.1:${env.HOST_PORT}/api/health >/dev/null 2>&1; then
+                      if docker run --rm --network ${env.CI_NETWORK} curlimages/curl -fsS http://${env.APP_CTR}:8080/api/health >/dev/null 2>&1; then
                         ok=1
                         break
                       fi
@@ -72,7 +72,7 @@ pipeline {
                       echo "GET /api/health smoke check failed"
                       exit 1
                     fi
-                    curl -fsS http://127.0.0.1:${env.HOST_PORT}/api/health
+                    docker run --rm --network ${env.CI_NETWORK} curlimages/curl -fsS http://${env.APP_CTR}:8080/api/health
                     echo "Smoke check passed."
                 """
             }
