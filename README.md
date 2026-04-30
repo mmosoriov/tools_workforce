@@ -46,12 +46,26 @@ To stop and remove the container when you're finished:
 docker compose down
 ```
 
+### Jenkins (CI pipeline)
+
+The repo includes a Declarative [`Jenkinsfile`](Jenkinsfile) at the root: **Checkout** → **build** Docker image **`worldcup-teams:${GIT_COMMIT}`** (falls back to `git rev-parse HEAD` when `GIT_COMMIT` is unset, e.g. some manual replays) → **stop/remove** prior CI containers **`worldcup-app-ci`** / **`worldcup-mongo-ci`** on shared network **`worldcup-ci-net`** → run **`mongo:7`** and the app → **`curl`** smoke test on **`GET http://127.0.0.1:18080/api/health`** → **`post { always }`** tears down those containers and the network.
+
+The app connects to MongoDB at import time; the pipeline always starts Mongo alongside the app so the smoke check can succeed.
+
+**Job type:** Create a **Pipeline** job (or **Multibranch Pipeline** for branches/PRs) with **Pipeline script from SCM**, script path **`Jenkinsfile`**.
+
+**Agent:** A Linux agent with **Docker CLI** available and permission to talk to the Docker daemon (`docker build`, `docker run`, etc.). Typical setups use an agent where Docker is installed natively, or a container agent with the host **`/var/run/docker.sock`** mounted so builds use the host engine.
+
+**Credentials:** None for a **public** Git remote. Use Jenkins **Git** credentials for **private** repositories. Add **registry** credentials in Jenkins only if you extend the pipeline to **push** images (not required by the current `Jenkinsfile`).
+
+**Smoke check:** The agent needs **`curl`** on `PATH` for the health request. Local Compose still uses port **8080**; CI maps the app to host port **18080** to reduce clashes on shared builders.
+
 ## Remaining Tasks (to reach end product)
 
-### Jenkins / Delivery pipeline
-- **Add `Jenkinsfile`** implementing: Checkout → Build Docker image → Run container (optionally smoke-check `GET /api/health`)
-- **Define Docker image naming/tagging** (e.g. `worldcup-teams:${GIT_COMMIT}`) and container cleanup strategy (stop/remove old container before running new one)
-- **Document Jenkins setup** in this README (job type, required Jenkins agent w/ Docker, any credentials if needed)
+### Jenkins / Delivery pipeline (done)
+- **`Jenkinsfile`**: Checkout → build image `worldcup-teams:${GIT_COMMIT}` → remove old CI containers/network → run `mongo:7` + app on `worldcup-ci-net` → smoke `GET /api/health` on port **18080** → always cleanup.
+- **Tagging / cleanup**: Image tag is the Git commit SHA; fixed container names are removed before each run and again in **`post { always }`**.
+- **Documentation**: This README (job type, agent + Docker, credentials).
 
 ### MongoDB persistence (done)
 - **`docker-compose.yml`**: `mongo` service (`mongo:7`), named volume `mongo_data`, app `depends_on` Mongo until healthy; app env `MONGO_URI`, `MONGO_COLLECTION`.
