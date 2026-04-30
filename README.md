@@ -60,6 +60,78 @@ The app connects to MongoDB at import time; the pipeline always starts Mongo alo
 
 **Smoke check:** The agent needs **`curl`** on `PATH` for the health request. Local Compose still uses port **8080**; CI maps the app to host port **18080** to reduce clashes on shared builders.
 
+#### Run Jenkins locally with Docker Desktop (beginner-friendly)
+
+Jenkins is a web app that runs in the background. You **start Jenkins**, then you open it in your web browser (usually at `http://localhost:8080`) to click buttons and run jobs.
+
+This is the easiest way to run Jenkins on a Mac: **Docker Desktop**.
+
+##### 1) Install Docker Desktop
+
+1. In your browser, search for **“Docker Desktop for Mac download”**
+2. Install it like a normal app (drag it to **Applications**)
+3. Open **Docker Desktop**
+4. Wait until Docker Desktop says it’s running (it may take a minute the first time)
+
+##### 2) Start Jenkins
+
+1. Open the **Terminal** app (Command+Space → type “Terminal” → Enter)
+2. Copy/paste this command and press Enter:
+
+```bash
+docker run -d --name jenkins \
+  -p 8080:8080 -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  jenkins/jenkins:lts
+```
+
+##### 3) Open Jenkins in your browser
+
+Open Chrome/Safari and go to:
+- `http://localhost:8080`
+
+##### 4) Unlock Jenkins (get the one-time password)
+
+In Terminal, run this to print the unlock password:
+
+```bash
+docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+Then:
+- Copy the password from Terminal
+- Paste it into the Jenkins page
+- Click **Install suggested plugins**
+- Create your admin user when it asks
+
+##### Stop / start Jenkins later
+
+- Stop Jenkins:
+
+```bash
+docker stop jenkins
+```
+
+- Start Jenkins again:
+
+```bash
+docker start jenkins
+```
+
+##### Remove Jenkins (only if you want to delete it)
+
+- Remove the Jenkins container:
+
+```bash
+docker rm -f jenkins
+```
+
+- Remove Jenkins’s saved data (jobs, settings). Only run this if you truly want to wipe it:
+
+```bash
+docker volume rm jenkins_home
+```
+
 ## Remaining Tasks (to reach end product)
 
 ### Jenkins / Delivery pipeline (done)
