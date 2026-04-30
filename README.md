@@ -75,16 +75,38 @@ This is the easiest way to run Jenkins on a Mac: **Docker Desktop**.
 
 ##### 2) Start Jenkins
 
+Because our pipeline requires running Docker commands (`docker build`, `docker run`), we need a custom Jenkins image that has the Docker CLI installed.
+
 1. Open the **Terminal** app (Command+Space → type “Terminal” → Enter)
-2. Copy/paste this command and press Enter:
+2. Create a custom image by running this command:
+
+```bash
+docker build -t my-jenkins-with-docker - <<EOF
+FROM jenkins/jenkins:lts
+USER root
+
+# Determine architecture and download the pre-compiled Docker static binary
+RUN ARCH=\$(uname -m) && \\
+    if [ "\$ARCH" = "x86_64" ]; then DOCKER_ARCH="x86_64"; \\
+    elif [ "\$ARCH" = "aarch64" ] || [ "\$ARCH" = "arm64" ]; then DOCKER_ARCH="aarch64"; \\
+    else echo "Unsupported architecture: \$ARCH" && exit 1; fi && \\
+    curl -fsSLO https://download.docker.com/linux/static/stable/\${DOCKER_ARCH}/docker-24.0.9.tgz && \\
+    tar xzvf docker-24.0.9.tgz && \\
+    mv docker/docker /usr/local/bin/ && \\
+    rm -rf docker docker-24.0.9.tgz
+
+USER jenkins
+EOF
+```
 
 ```bash
 docker run -d --name jenkins \
-  -p 8080:8080 -p 50000:50000 \
+  -p 8081:8080 -p 50000:50000 \
   -v jenkins_home:/var/jenkins_home \
-  jenkins/jenkins:lts
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -u root \
+  my-jenkins-with-docker
 ```
-
 ##### 3) Open Jenkins in your browser
 
 Open Chrome/Safari and go to:
