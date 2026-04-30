@@ -11,7 +11,7 @@ IDEA:
 
 • Jenkins pipeline: Checkout → Build Docker image → Run container
 
-• Add MongoDB for persistence
+• MongoDB persists teams (Compose service + volume)
 
 
 ## Usage
@@ -53,19 +53,16 @@ docker compose down
 - **Define Docker image naming/tagging** (e.g. `worldcup-teams:${GIT_COMMIT}`) and container cleanup strategy (stop/remove old container before running new one)
 - **Document Jenkins setup** in this README (job type, required Jenkins agent w/ Docker, any credentials if needed)
 
-### MongoDB persistence
-- **Add MongoDB to `docker-compose.yml`**
-  - add a `mongo` service
-  - add a named volume for DB persistence
-  - add environment wiring so the app can reach Mongo by service name
-- **Update `app.py` to persist teams in MongoDB**
-  - replace in-memory `teams` list with Mongo reads/writes
-  - ensure IDs are stable (Mongo `_id` or your own `id`)
-  - ensure add/delete operate on the persisted records
-- **Add configuration via environment variables**
-  - `MONGO_URI` (and optionally DB/collection names) provided via Compose
-- **Update dependencies**
-  - add a MongoDB driver (e.g. `pymongo`) to `requirements.txt`
+### MongoDB persistence (done)
+- **`docker-compose.yml`**: `mongo` service (`mongo:7`), named volume `mongo_data`, app `depends_on` Mongo until healthy; app env `MONGO_URI`, `MONGO_COLLECTION`.
+- **`app.py`**: PyMongo reads/writes; stable integer `id` per team; seed Argentina/France/Brazil (`id` 1–3) when the collection is empty.
+- **`requirements.txt`**: `pymongo`.
+
+Environment for the app:
+- **`MONGO_URI`**: e.g. `mongodb://mongo:27017/worldcup` in Compose; default for local runs without Compose is `mongodb://localhost:27017/worldcup`.
+- **`MONGO_COLLECTION`**: collection name (default `teams`).
+
+To wipe DB data and re-seed: `docker compose down -v`, then `docker compose up --build -d`.
 
 ### Product completeness / behavior
 - **Validation + edge cases**

@@ -1,17 +1,65 @@
 # app.py
 import os
+import time
+
 from flask import Flask, request, redirect, url_for, render_template_string
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
 
 app = Flask(__name__)
 
-# 1. In-Memory Data Storage
-
-teams = [
+SEED_TEAMS = [
     {"id": 1, "name": "Argentina", "flag": "🇦🇷"},
     {"id": 2, "name": "France", "flag": "🇫🇷"},
-    {"id": 3, "name": "Brazil", "flag": "🇧🇷"}
+    {"id": 3, "name": "Brazil", "flag": "🇧🇷"},
 ]
-next_team_id = 4
+
+mongo_client: MongoClient | None = None
+teams_coll = None
+
+
+def _mongo_uri() -> str:
+    return os.environ.get("MONGO_URI", "mongodb://localhost:27017/worldcup")
+
+
+def _collection_name() -> str:
+    return os.environ.get("MONGO_COLLECTION", "teams")
+
+
+def _wait_for_mongo(client: MongoClient, attempts: int = 30, delay_s: float = 1.0) -> None:
+    last_err: Exception | None = None
+    for _ in range(attempts):
+        try:
+            client.admin.command("ping")
+            return
+        except PyMongoError as e:
+            last_err = e
+            time.sleep(delay_s)
+    raise RuntimeError(f"Could not connect to MongoDB after {attempts} attempts") from last_err
+
+
+def init_db() -> None:
+    global mongo_client, teams_coll
+
+    uri = _mongo_uri()
+    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+    _wait_for_mongo(client)
+
+    db = client.get_default_database()
+    if db is None:
+        db = client["worldcup"]
+
+    coll = db[_collection_name()]
+    coll.create_index("id", unique=True)
+
+    if coll.count_documents({}) == 0:
+        coll.insert_many(SEED_TEAMS)
+
+    mongo_client = client
+    teams_coll = coll
+
+
+init_db()
 
 # HTML Template with Bootstrap for styling
 HTML_TEMPLATE = """
@@ -83,38 +131,48 @@ HTML_TEMPLATE = """
 </html>
 """
 
+
+def list_teams():
+    assert teams_coll is not None
+    return list(teams_coll.find({}, {"_id": 0}).sort("id", 1))
+
+
+def next_team_id() -> int:
+    assert teams_coll is not None
+    doc = teams_coll.find_one(sort=[("id", -1)], projection={"id": 1})
+    return (doc["id"] + 1) if doc else 1
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
 
+
 @app.route("/", methods=["GET"])
 def home():
-    # Render the HTML template and pass the teams list
-    return render_template_string(HTML_TEMPLATE, teams=teams)
+    return render_template_string(HTML_TEMPLATE, teams=list_teams())
+
 
 @app.route("/add", methods=["POST"])
 def add_team():
-    global next_team_id
-    
-    # Grab data from the traditional HTML form
+    assert teams_coll is not None
     name = request.form.get("name")
     flag = request.form.get("flag")
-    
+
     if name and flag:
-        teams.append({"id": next_team_id, "name": name, "flag": flag})
-        next_team_id += 1
-        
-    # Redirect back to the home page to see the new data
+        teams_coll.insert_one(
+            {"id": next_team_id(), "name": name.strip(), "flag": flag.strip()}
+        )
+
     return redirect(url_for("home"))
+
 
 @app.route("/delete/<int:team_id>", methods=["POST"])
 def delete_team(team_id):
-    global teams
-    # Filter out the team with the matching ID
-    teams = [team for team in teams if team["id"] != team_id]
-    
-    # Redirect back to the home page
+    assert teams_coll is not None
+    teams_coll.delete_one({"id": team_id})
     return redirect(url_for("home"))
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=True)
