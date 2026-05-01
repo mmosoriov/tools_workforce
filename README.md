@@ -70,18 +70,13 @@ The app connects to MongoDB at import time; the pipeline always starts Mongo alo
 
 **Smoke check:** The agent needs **`curl`** on `PATH` for the health request. Local Compose still uses port **8080**; CI maps the app to host port **18080** to reduce clashes on shared builders.
 
-#### Run Jenkins locally with Docker Desktop (beginner-friendly)
+#### Run Jenkins locally with Docker Desktop 
 
 Jenkins is a web app that runs in the background. You **start Jenkins**, then you open it in your web browser (usually at `http://localhost:8080`) to click buttons and run jobs.
 
 This is the easiest way to run Jenkins on a Mac: **Docker Desktop**.
 
 ##### 1) Install Docker Desktop
-
-1. In your browser, search for **“Docker Desktop for Mac download”**
-2. Install it like a normal app (drag it to **Applications**)
-3. Open **Docker Desktop**
-4. Wait until Docker Desktop says it’s running (it may take a minute the first time)
 
 ##### 2) Start Jenkins
 
@@ -95,15 +90,17 @@ docker build -t my-jenkins-with-docker - <<EOF
 FROM jenkins/jenkins:lts
 USER root
 
-# Determine architecture and download the pre-compiled Docker static binary
 RUN ARCH=\$(uname -m) && \\
-    if [ "\$ARCH" = "x86_64" ]; then DOCKER_ARCH="x86_64"; \\
-    elif [ "\$ARCH" = "aarch64" ] || [ "\$ARCH" = "arm64" ]; then DOCKER_ARCH="aarch64"; \\
+    if [ "\$ARCH" = "x86_64" ]; then DOCKER_ARCH="x86_64"; COMP_ARCH="x86_64"; \\
+    elif [ "\$ARCH" = "aarch64" ] || [ "\$ARCH" = "arm64" ]; then DOCKER_ARCH="aarch64"; COMP_ARCH="aarch64"; \\
     else echo "Unsupported architecture: \$ARCH" && exit 1; fi && \\
     curl -fsSLO https://download.docker.com/linux/static/stable/\${DOCKER_ARCH}/docker-24.0.9.tgz && \\
     tar xzvf docker-24.0.9.tgz && \\
     mv docker/docker /usr/local/bin/ && \\
-    rm -rf docker docker-24.0.9.tgz
+    rm -rf docker docker-24.0.9.tgz && \\
+    mkdir -p /usr/local/lib/docker/cli-plugins && \\
+    curl -SL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-\${COMP_ARCH} -o /usr/local/lib/docker/cli-plugins/docker-compose && \\
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 USER jenkins
 EOF
@@ -120,7 +117,7 @@ docker run -d --name jenkins \
 ##### 3) Open Jenkins in your browser
 
 Open Chrome/Safari and go to:
-- `http://localhost:8080`
+- `http://localhost:8081`
 
 ##### 4) Unlock Jenkins (get the one-time password)
 
@@ -134,7 +131,13 @@ Then:
 - Copy the password from Terminal
 - Paste it into the Jenkins page
 - Click **Install suggested plugins**
-- Create your admin user when it asks
+- skip creating admin user
+
+##### 5) Create new job by clikcin on new item
+##### 6) Pipeline script from SCM
+##### 7) SCM as Git, repo = https://github.com/mmosoriov/tools_workforce
+- branch specifier */main
+
 
 ##### Stop / start Jenkins later
 
