@@ -73,7 +73,7 @@ The repo includes a Declarative [`Jenkinsfile`](Jenkinsfile) organized into 4 st
 Ensure Docker Desktop is downloaded, installed, and currently running on your Mac.
 
 ##### 2) Start Jenkins
-Because our pipeline requires running Docker commands (`docker build`, `docker run`), we need a custom Jenkins image that has the Docker CLI installed.
+Because our pipeline requires running Docker commands (`docker build`, `docker run`), we need a custom Jenkins image that has the Docker CLI installed. This approach is not recommended to use in production, where a more robust approach should be taken to install Docker. Using the docker convenience script is a security vulnerability. (https://get.docker.com)
 
 1. Open the **Terminal** app.
 2. Create a custom image by running this command:
