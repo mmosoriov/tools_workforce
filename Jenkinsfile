@@ -16,7 +16,7 @@ pipeline {
             }
         }
 
-        stage('Build image') {
+        stage('Build') {
             steps {
                 script {
                     def commit = env.GIT_COMMIT?.trim()
@@ -29,15 +29,18 @@ pipeline {
             }
         }
 
-        stage('Run and smoke') {
+        stage('Run') {
             steps {
                 sh """
                     set -e
+                    # 1. Setup isolated CI Network
                     docker network inspect ${env.CI_NETWORK} >/dev/null 2>&1 || docker network create ${env.CI_NETWORK}
                     docker rm -f ${env.APP_CTR} ${env.MONGO_CTR} 2>/dev/null || true
 
+                    # 2. Run Database
                     docker run -d --name ${env.MONGO_CTR} --network ${env.CI_NETWORK} mongo:7
 
+                    # 3. Wait for Mongo 
                     echo "Waiting for MongoDB..."
                     mongo_ok=0
                     for i in \$(seq 1 30); do
@@ -52,15 +55,25 @@ pipeline {
                       exit 1
                     fi
 
+                    # 4. Run App Container on the same network
                     docker run -d --name ${env.APP_CTR} --network ${env.CI_NETWORK} \\
                       -e MONGO_URI=mongodb://${env.MONGO_CTR}:27017/worldcup \\
                       -e MONGO_COLLECTION=teams \\
                       -e PORT=8080 \\
                       -p ${env.HOST_PORT}:8080 \\
                       ${env.IMAGE_NAME}:${env.IMAGE_TAG}
+                """
+            }
+        }
 
+        stage('Verify') {
+            steps {
+                sh """
+                    set -e
                     echo "Waiting for app health..."
                     ok=0
+                    
+                    # Ping the app using a temporary curl container ON THE SAME NETWORK
                     for i in \$(seq 1 60); do
                       if docker run --rm --network ${env.CI_NETWORK} curlimages/curl -fsS http://${env.APP_CTR}:8080/api/health >/dev/null 2>&1; then
                         ok=1
@@ -68,12 +81,15 @@ pipeline {
                       fi
                       sleep 2
                     done
+                    
                     if [ "\$ok" -ne 1 ]; then
-                      echo "GET /api/health smoke check failed"
+                      echo "GET /api/health check failed"
                       exit 1
                     fi
+                    
+                    # Final confirmation print
                     docker run --rm --network ${env.CI_NETWORK} curlimages/curl -fsS http://${env.APP_CTR}:8080/api/health
-                    echo "Smoke check passed."
+                    echo "\\n check passed."
                 """
             }
         }

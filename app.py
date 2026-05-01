@@ -7,7 +7,7 @@ from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
 app = Flask(__name__)
-
+# A starting list of teams as default
 SEED_TEAMS = [
     {"id": 1, "name": "Argentina", "flag": "🇦🇷"},
     {"id": 2, "name": "France", "flag": "🇫🇷"},
@@ -25,7 +25,7 @@ def _mongo_uri() -> str:
 def _collection_name() -> str:
     return os.environ.get("MONGO_COLLECTION", "teams")
 
-
+# Wait for database to start
 def _wait_for_mongo(client: MongoClient, attempts: int = 30, delay_s: float = 1.0) -> None:
     last_err: Exception | None = None
     for _ in range(attempts):
