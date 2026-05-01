@@ -1,20 +1,19 @@
-# tools_workforce
 
-IDEA:
-# Flask World Cup App - Shows the Remaining teams 
- 
- GitHub → Jenkins → Docker
+# Flask World Cup App 
+ Tools:
+ GitHub → Jenkins → Docker, persistance with MongoDB
 
+Architecture: 
 • A minimal Flask app with a list of National teams and their flags (add/delete items)
 
 • Docker builds and runs it
 
-• Jenkins pipeline: Checkout → Build Docker image → Run container
+• Jenkins pipeline: Checkout → Build Docker image → Run container → Verify → Destroy
 
-• MongoDB persists teams (Compose service + volume)
+• MongoDB persists list of teams 
 
 
-## Usage
+## Usage 
 
 ### 1. Start the Application
 Build and run the application using Docker Compose in detached mode:
@@ -28,22 +27,33 @@ Verify the application is running via the API health endpoint:
 curl http://localhost:8080/api/health
 ```
 
-### 3. Add a Team
+### 3. View List of Teams
+You can view the visual grid of all current teams by opening your web browser and navigating to:
+`http://localhost:8080/`
+*(Alternatively, from the terminal, you can run `curl http://localhost:8080/` to get the raw HTML string).*
+
+### 4. Add a Team
 You can add a team by sending a POST request with form data:
 ```bash
 curl -X POST http://localhost:8080/add -d "name=Germany" -d "flag=🇩🇪"
 ```
 
-### 4. Remove a Team
-You can remove a team by sending a POST request to the delete endpoint along with the team's ID (e.g., ID 1 for Argentina):
+### 5. Remove a Team
+You can remove a team by sending a POST request to the delete endpoint along with the team's ID (e.g., 1 for Argentina):
 ```bash
 curl -X POST http://localhost:8080/delete/1
 ```
 
-### 5. Stop the Application
+### 6. Stop the Application
 To stop and remove the container when you're finished:
 ```bash
 docker compose down
+```
+
+### 7. Reset Database
+To completely wipe out all saved data and restore the database to the original default seed teams:
+```bash
+docker compose down -v
 ```
 
 ### Jenkins (CI pipeline)

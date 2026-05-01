@@ -2,11 +2,8 @@ pipeline {
     agent any
 
     environment {
-        CI_NETWORK = 'worldcup-ci-net'
-        MONGO_CTR = 'worldcup-mongo-ci'
-        APP_CTR = 'worldcup-app-ci'
-        HOST_PORT = '18080'
-        IMAGE_NAME = 'worldcup-teams'
+        // The port mapped to the host machine in docker-compose.yml
+        HOST_PORT = '8080'
     }
 
     stages {
@@ -16,64 +13,51 @@ pipeline {
             }
         }
 
-        stage('Build image') {
+        stage('Build') {
             steps {
-                script {
-                    def commit = env.GIT_COMMIT?.trim()
-                    env.IMAGE_TAG = (commit && commit.length() > 0) ? commit : sh(
-                        returnStdout: true,
-                        script: 'git rev-parse HEAD'
-                    ).trim()
-                }
-                sh "docker build -t ${env.IMAGE_NAME}:${env.IMAGE_TAG} ."
+                sh """
+                    # Pull down any existing environment from a previous failure
+                    docker compose down -v 2>/dev/null || true
+                    
+                    # Explicitly build the Docker images defined in docker-compose.yml
+                    docker compose build
+                """
             }
         }
 
-        stage('Run and smoke') {
+        stage('Run') {
+            steps {
+                sh """
+                    docker compose up -d
+                """
+            }
+        }
+
+        stage('Verify') {
             steps {
                 sh """
                     set -e
-                    docker network inspect ${env.CI_NETWORK} >/dev/null 2>&1 || docker network create ${env.CI_NETWORK}
-                    docker rm -f ${env.APP_CTR} ${env.MONGO_CTR} 2>/dev/null || true
-
-                    docker run -d --name ${env.MONGO_CTR} --network ${env.CI_NETWORK} mongo:7
-
-                    echo "Waiting for MongoDB..."
-                    mongo_ok=0
-                    for i in \$(seq 1 30); do
-                      if docker exec ${env.MONGO_CTR} mongosh --quiet --eval "db.adminCommand({ ping: 1 })" >/dev/null 2>&1; then
-                        mongo_ok=1
-                        break
-                      fi
-                      sleep 2
-                    done
-                    if [ "\$mongo_ok" -ne 1 ]; then
-                      echo "MongoDB did not become ready in time"
-                      exit 1
-                    fi
-
-                    docker run -d --name ${env.APP_CTR} --network ${env.CI_NETWORK} \\
-                      -e MONGO_URI=mongodb://${env.MONGO_CTR}:27017/worldcup \\
-                      -e MONGO_COLLECTION=teams \\
-                      -e PORT=8080 \\
-                      -p ${env.HOST_PORT}:8080 \\
-                      ${env.IMAGE_NAME}:${env.IMAGE_TAG}
-
                     echo "Waiting for app health..."
                     ok=0
-                    for i in \$(seq 1 60); do
-                      if docker run --rm --network ${env.CI_NETWORK} curlimages/curl -fsS http://${env.APP_CTR}:8080/api/health >/dev/null 2>&1; then
+                    
+                    # API health endpoint
+                    for i in \$(seq 1 15); do
+                      if curl -fsS http://localhost:${env.HOST_PORT}/api/health >/dev/null 2>&1; then
                         ok=1
                         break
                       fi
                       sleep 2
                     done
+                    
                     if [ "\$ok" -ne 1 ]; then
                       echo "GET /api/health smoke check failed"
+                      docker compose logs  # Print logs to help troubleshoot if it failed
                       exit 1
                     fi
-                    docker run --rm --network ${env.CI_NETWORK} curlimages/curl -fsS http://${env.APP_CTR}:8080/api/health
-                    echo "Smoke check passed."
+                    
+                    # Final confirmation curl
+                    curl -fsS http://localhost:${env.HOST_PORT}/api/health
+                    echo "\\nVerification passed."
                 """
             }
         }
@@ -81,10 +65,8 @@ pipeline {
 
     post {
         always {
-            sh """
-                docker rm -f ${env.APP_CTR} ${env.MONGO_CTR} 2>/dev/null || true
-                docker network rm ${env.CI_NETWORK} 2>/dev/null || true
-            """
+            // destroy test environment (containers, networks, and volumes) 
+            sh "docker compose down -v 2>/dev/null || true"
         }
     }
 }
